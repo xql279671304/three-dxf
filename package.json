@@ -21,8 +21,7 @@
   ],
   "license": "MIT",
   "devDependencies": {},
-  "dependencies": {
-  },
+  "dependencies": {},
   "keywords": [
     "dxf",
     "cad",

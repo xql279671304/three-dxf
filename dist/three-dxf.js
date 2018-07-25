@@ -84,145 +84,114 @@ var ThreeDxf;
         var $parent = $(parent);
 
         createLineTypeShaders(data);
-
         var scene = new THREE.Scene();
 
         // Create scene from dxf object (data)
-        var i, entity, obj, min_x, min_y, min_z, max_x, max_y, max_z;
+        var i, entity, obj;
         var dims = {
             min: { x: false, y: false, z: false},
             max: { x: false, y: false, z: false}
         };
-        for(i = 0; i < data.entities.length; i++) {
-            entity = data.entities[i];
+        
+        
+        drawBg(function (geometry) {
+            var meshes = []
+            // 背景图片
+            scene.add(geometry);
 
-            if(entity.type === 'DIMENSION') {
-                if(entity.block) {
-                    var block = data.blocks[entity.block];
-                    if(!block) {
-                        console.error('Missing referenced block "' + entity.block + '"');
-                        continue;
-                    }
-                    for(var j = 0; j < block.entities.length; j++) {
-                        obj = drawEntity(block.entities[j], data);
+            // 渲染dxf
+            for(i = 0; i < data.entities.length; i++) {
+                entity = data.entities[i];
+
+                if(entity.type === 'DIMENSION') {
+                    if(entity.block) {
+                        var block = data.blocks[entity.block];
+                        if(!block) {
+                            console.error('Missing referenced block "' + entity.block + '"');
+                            continue;
+                        }
+                        for(var j = 0; j < block.entities.length; j++) {
+                            obj = drawEntity(block.entities[j], data);
+                        }
+                    } else {
+                        console.log('WARNING: No block for DIMENSION entity');
                     }
                 } else {
-                    console.log('WARNING: No block for DIMENSION entity');
+                    obj = drawEntity(entity, data);
                 }
+
+                if (obj) {
+                    var bbox = new THREE.Box3().setFromObject(obj);
+                    if (bbox.min.x && ((dims.min.x === false) || (dims.min.x > bbox.min.x))) dims.min.x = bbox.min.x;
+                    if (bbox.min.y && ((dims.min.y === false) || (dims.min.y > bbox.min.y))) dims.min.y = bbox.min.y;
+                    if (bbox.min.z && ((dims.min.z === false) || (dims.min.z > bbox.min.z))) dims.min.z = bbox.min.z;
+                    if (bbox.max.x && ((dims.max.x === false) || (dims.max.x < bbox.max.x))) dims.max.x = bbox.max.x;
+                    if (bbox.max.y && ((dims.max.y === false) || (dims.max.y < bbox.max.y))) dims.max.y = bbox.max.y;
+                    if (bbox.max.z && ((dims.max.z === false) || (dims.max.z < bbox.max.z))) dims.max.z = bbox.max.z;
+                    meshes.push(obj)
+                }
+                obj = null;
+            }
+            width = width || $parent.innerWidth();
+            height = height || $parent.innerHeight();
+            var aspectRatio = width / height;
+
+            var upperRightCorner = { x: dims.max.x, y: dims.max.y };
+            var lowerLeftCorner = { x: dims.min.x, y: dims.min.y };
+
+            // Figure out the current viewport extents
+            var vp_width = upperRightCorner.x - lowerLeftCorner.x;
+            var vp_height = upperRightCorner.y - lowerLeftCorner.y;
+            var center = center || {
+                x: vp_width / 2 + lowerLeftCorner.x,
+                y: vp_height / 2 + lowerLeftCorner.y
+            };
+
+            // Fit all objects into current ThreeDXF viewer
+            var extentsAspectRatio = Math.abs(vp_width / vp_height);
+            if (aspectRatio > extentsAspectRatio) {
+                vp_width = vp_height * aspectRatio;
             } else {
-                obj = drawEntity(entity, data);
+                vp_height = vp_width / aspectRatio;
             }
+            
+            var viewPort = {
+                bottom: -vp_height / 2,
+                left: -vp_width / 2,
+                top: vp_height / 2,
+                right: vp_width / 2,
+                center: {
+                    x: center.x,
+                    y: center.y
+                }
+            };
 
-            if (obj) {
-                var bbox = new THREE.Box3().setFromObject(obj);
-                if (bbox.min.x && ((dims.min.x === false) || (dims.min.x > bbox.min.x))) dims.min.x = bbox.min.x;
-                if (bbox.min.y && ((dims.min.y === false) || (dims.min.y > bbox.min.y))) dims.min.y = bbox.min.y;
-                if (bbox.min.z && ((dims.min.z === false) || (dims.min.z > bbox.min.z))) dims.min.z = bbox.min.z;
-                if (bbox.max.x && ((dims.max.x === false) || (dims.max.x < bbox.max.x))) dims.max.x = bbox.max.x;
-                if (bbox.max.y && ((dims.max.y === false) || (dims.max.y < bbox.max.y))) dims.max.y = bbox.max.y;
-                if (bbox.max.z && ((dims.max.z === false) || (dims.max.z < bbox.max.z))) dims.max.z = bbox.max.z;
-                scene.add(obj);
-            }
-            obj = null;
-        }
+            var camera = new THREE.OrthographicCamera(viewPort.left, viewPort.right, viewPort.top, viewPort.bottom, 1, 20);
+            camera.position.z = 10;
+            camera.position.x = viewPort.center.x;
+            camera.position.y = viewPort.center.y;
 
-        width = width || $parent.innerWidth();
-        height = height || $parent.innerHeight();
-        var aspectRatio = width / height;
-
-        var upperRightCorner = { x: dims.max.x, y: dims.max.y };
-        var lowerLeftCorner = { x: dims.min.x, y: dims.min.y };
-
-        // Figure out the current viewport extents
-        var vp_width = upperRightCorner.x - lowerLeftCorner.x;
-        var vp_height = upperRightCorner.y - lowerLeftCorner.y;
-        var center = center || {
-            x: vp_width / 2 + lowerLeftCorner.x,
-            y: vp_height / 2 + lowerLeftCorner.y
-        };
-
-        // Fit all objects into current ThreeDXF viewer
-        var extentsAspectRatio = Math.abs(vp_width / vp_height);
-        if (aspectRatio > extentsAspectRatio) {
-            vp_width = vp_height * aspectRatio;
-        } else {
-            vp_height = vp_width / aspectRatio;
-        }
-        
-        var viewPort = {
-            bottom: -vp_height / 2,
-            left: -vp_width / 2,
-            top: vp_height / 2,
-            right: vp_width / 2,
-            center: {
-                x: center.x,
-                y: center.y
-            }
-        };
-
-        var camera = new THREE.OrthographicCamera(viewPort.left, viewPort.right, viewPort.top, viewPort.bottom, 1, 19);
-        camera.position.z = 10;
-        camera.position.x = viewPort.center.x;
-        camera.position.y = viewPort.center.y;
-
-        var renderer = this.renderer = new THREE.WebGLRenderer();
-        renderer.setSize(width, height);
-        renderer.setClearColor(0xfffffff, 1);
-
-        $parent.append(renderer.domElement);
-        $parent.show();
-
-        var controls = new THREE.OrbitControls(camera, parent);
-        controls.target.x = camera.position.x;
-        controls.target.y = camera.position.y;
-        controls.target.z = 0;
-        controls.zoomSpeed = 3;
-
-        // Uncommend this to disable rotation (does not make much sense with 2D drawings).
-        //controls.enableRotate = false;
-
-        this.render = function() { renderer.render(scene, camera) };
-        controls.addEventListener('change', this.render);
-        this.render();
-        controls.update();
-
-        $parent.on('click', function(event) {
-            var $el = $(renderer.domElement);
-
-            var vector = new THREE.Vector3(
-                ( (event.pageX - $el.offset().left) / $el.innerWidth() ) * 2 - 1,
-                -( (event.pageY - $el.offset().top) / $el.innerHeight() ) * 2 + 1,
-                0.5);
-            vector.unproject(camera);
-
-            var dir = vector.sub(camera.position).normalize();
-
-            var distance = -camera.position.z / dir.z;
-
-            var pos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-            console.log(pos.x, pos.y); // Position in cad that is clicked
-        });
-
-        this.resize = function(width, height) {
-            var originalWidth = renderer.domElement.width;
-            var originalHeight = renderer.domElement.height;
-
-            var hscale = width / originalWidth;
-            var vscale = height / originalHeight;
-
-
-            camera.top = (vscale * camera.top);
-            camera.bottom = (vscale * camera.bottom);
-            camera.left = (hscale * camera.left);
-            camera.right = (hscale * camera.right);
-
-    //        camera.updateProjectionMatrix();
-
+            var renderer = this.renderer = new THREE.WebGLRenderer();
             renderer.setSize(width, height);
             renderer.setClearColor(0xfffffff, 1);
+
+            $parent.append(renderer.domElement);
+            $parent.show();
+
+            this.render = function() { renderer.render(scene, camera) };
             this.render();
-        };
+        });
+
+        function drawBg (callback) {
+            new THREE.TextureLoader().load( './data/2.png', function(texture) {
+                var material = new THREE.MeshBasicMaterial( { map: texture } );
+                var geometry = new THREE.PlaneGeometry(width, height, 0, 0);
+                var geometry = new THREE.Mesh( geometry, material );
+                geometry.position.x = width / 2
+                geometry.position.y = height / 2
+                callback(geometry)
+            });
+        }
 
         function drawEntity(entity, data) {
             var mesh;
